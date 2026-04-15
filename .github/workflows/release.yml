@@ -101,7 +101,11 @@ jobs:
         run: |
           FILES=(module.json)
 
-          for path in lang scripts styles templates; do
+          if [[ -f module-tiers.json ]]; then
+            FILES+=(module-tiers.json)
+          fi
+
+          for path in assets lang packs scripts styles templates; do
             if [[ -e "$path" ]]; then
               FILES+=("$path")
             fi
@@ -138,7 +142,11 @@ jobs:
       - name: Prepare release artifacts
         shell: bash
         run: |
-          echo "RELEASE_ARTIFACTS=./module.json, ./${MODULE_ID}.zip, ./CHANGELOG.md" >> "$GITHUB_ENV"
+          ARTIFACTS="./module.json, ./${MODULE_ID}.zip, ./CHANGELOG.md"
+          if [[ -f module-tiers.json ]]; then
+            ARTIFACTS="${ARTIFACTS}, ./module-tiers.json"
+          fi
+          echo "RELEASE_ARTIFACTS=${ARTIFACTS}" >> "$GITHUB_ENV"
 
       - name: Create GitHub Release
         uses: ncipollo/release-action@v1
@@ -173,6 +181,11 @@ jobs:
 
           echo "Uploading module.json to ${TARGET}/module.json"
           aws s3 cp module.json "${TARGET}/module.json" --endpoint-url "${ENDPOINT}"
+
+          if [[ -f module-tiers.json ]]; then
+            echo "Uploading module tiers to ${TARGET}/module-tiers.json"
+            aws s3 cp module-tiers.json "${TARGET}/module-tiers.json" --endpoint-url "${ENDPOINT}"
+          fi
 
           echo "Uploading bundle to ${TARGET}/${MODULE_ID}.zip"
           aws s3 cp "./${MODULE_ID}.zip" "${TARGET}/${MODULE_ID}.zip" --endpoint-url "${ENDPOINT}"
