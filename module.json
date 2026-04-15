@@ -1,57 +1,57 @@
 {
-  "id": "sc-conditional-activities",
-  "title": "SC - Conditional Activities",
-  "version": "1.0.0",
-  "authors": [
-    {
-      "name": "Gustavo Bacelar",
-      "flags": {}
-    }
-  ],
-  "compatibility": {
-    "minimum": "13",
-    "verified": "14"
-  },
-  "flags": {
-    "canUpload": true
-  },
-  "languages": [
-    {
-      "lang": "en",
-      "name": "English",
-      "path": "lang/en.json",
-      "flags": {}
-    },
-    {
-      "lang": "pt-BR",
-      "name": "Português (Brasil)",
-      "path": "lang/pt-BR.json",
-      "flags": {}
-    }
-  ],
-  "esmodules": [
-    "scripts/main.js"
-  ],
-  "styles": [
-    {
-      "src": "styles/styles.css"
-    }
-  ],
-  "url": "https://github.com/Shattered-Codex/sc-conditional-activities",
-  "manifest": "https://github.com/Shattered-Codex/sc-conditional-activities/releases/latest/download/module.json",
-  "download": "https://github.com/Shattered-Codex/sc-conditional-activities/releases/download/v1.0.0/sc-conditional-activities.zip",
-  "relationships": {
-    "systems": [
-      {
-        "id": "dnd5e",
-        "type": "system",
-        "compatibility": {
-          "minimum": "5.0.0"
+    "id": "sc-conditional-activities",
+    "title": "SC - Conditional Activities",
+    "version": "0.0.1",
+    "authors": [
+        {
+            "name": "Gustavo Bacelar",
+            "flags": {}
         }
-      }
     ],
-    "requires": [],
-    "recommends": []
-  },
-  "description": "Adds JavaScript conditions to dnd5e activities."
+    "compatibility": {
+        "minimum": "13",
+        "verified": "14"
+    },
+    "flags": {
+        "canUpload": true
+    },
+    "languages": [
+        {
+            "lang": "en",
+            "name": "English",
+            "path": "lang/en.json",
+            "flags": {}
+        },
+        {
+            "lang": "pt-BR",
+            "name": "Português (Brasil)",
+            "path": "lang/pt-BR.json",
+            "flags": {}
+        }
+    ],
+    "esmodules": [
+        "scripts/main.js"
+    ],
+    "styles": [
+        {
+            "src": "styles/styles.css"
+        }
+    ],
+    "url": "https://github.com/Shattered-Codex/sc-conditional-activities",
+    "manifest": "https://github.com/Shattered-Codex/sc-conditional-activities/releases/latest/download/module.json",
+    "download": "https://github.com/Shattered-Codex/sc-conditional-activities/releases/download/v0.0.1/sc-conditional-activities.zip",
+    "relationships": {
+        "systems": [
+            {
+                "id": "dnd5e",
+                "type": "system",
+                "compatibility": {
+                    "minimum": "5.0.0"
+                }
+            }
+        ],
+        "requires": [],
+        "recommends": []
+    },
+    "description": "Adds JavaScript conditions to dnd5e activities."
 }
