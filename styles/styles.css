@@ -1,0 +1,79 @@
+.sc-ca-condition-tab fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.sc-ca-condition-tab .sc-ca-help-link {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--font-size-12, 12px);
+}
+
+.sc-ca-condition-code {
+  min-height: 220px;
+}
+
+.sc-ca-condition-code--readonly {
+  width: 100%;
+  resize: vertical;
+}
+
+.sc-ca-validation-warning {
+  margin: 0;
+}
+
+.sc-ca-locked {
+  opacity: 0.72;
+}
+
+.sc-ca-locked-label {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin: 0 0 0 8px;
+  padding: 2px 6px;
+  border: 1px solid rgb(157 43 43 / 70%);
+  border-radius: 6px;
+  color: #8f1d1d;
+  background: rgb(255 240 240 / 88%);
+  font-size: var(--font-size-11, 11px);
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.name-stacked > .sc-ca-locked-label {
+  margin: 4px 0 0;
+}
+
+.activity-choice .sc-ca-locked-label {
+  margin-left: 10px;
+}
+
+.activity-choice [data-action="choose"] {
+  gap: 10px;
+}
+
+.sc-ca-docs-button i.fa-hat-wizard,
+.sc-ca-docs-setting-row i.fa-hat-wizard {
+  color: #3cba54;
+}
+
+.sc-ca-docs-button:hover i.fa-hat-wizard,
+.sc-ca-docs-button:focus i.fa-hat-wizard {
+  color: #62d276;
+  text-shadow: 0 0 6px rgba(60, 186, 84, 0.35);
+}
+
+.sc-ca-support-button i {
+  color: #ff424d;
+}
+
+.sc-ca-support-button:hover i,
+.sc-ca-support-button:focus i {
+  color: #ff6a72;
+  text-shadow: 0 0 6px rgba(255, 66, 77, 0.35);
+}
