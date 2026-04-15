@@ -267,3 +267,4 @@ return sockets.some((slot) => Boolean(slot?.gem));
 - If a condition throws an error, the activity is treated as unavailable.
 - Conditions can use `await`.
 - Conditions run when the UI checks availability and again when the activity is used.
+
