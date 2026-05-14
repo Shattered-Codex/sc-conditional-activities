@@ -30,5 +30,59 @@
       placeholder="{{ strings.placeholder }}"
       disabled>{{ condition }}</textarea>
     {{/if}}
+
+    <div class="sc-ca-form-field">
+      <label class="sc-ca-field-label" for="{{ warningInputId }}">
+        <span>{{ strings.warningLabel }}</span>
+        <i class="fa-solid fa-circle-info" data-tooltip="{{ strings.warningTooltip }}"></i>
+      </label>
+      <p class="hint">{{ strings.warningHint }}</p>
+      <textarea
+        id="{{ warningInputId }}"
+        name="{{ warningMessageFlagPath }}"
+        class="sc-ca-warning-message"
+        rows="4"
+        placeholder="{{ strings.warningPlaceholder }}"
+        data-sc-ca-warning-input
+        {{#unless editable}}disabled{{/unless}}
+      >{{ warningMessage }}</textarea>
+    </div>
+
+    <div class="sc-ca-form-field">
+      <label class="sc-ca-field-label" for="{{ badgeInputId }}">
+        <span>{{ strings.badgeLabel }}</span>
+        <i class="fa-solid fa-circle-info" data-tooltip="{{ strings.badgeTooltip }}"></i>
+      </label>
+      <div class="sc-ca-inline-meta">
+        <p class="hint">{{ strings.badgeHint }}</p>
+        <span class="sc-ca-char-counter"><span data-sc-ca-badge-counter>{{ badgeLabelLength }}/{{ badgeLabelMaxLength }}</span> {{ strings.charactersUsed }}</span>
+      </div>
+      <input
+        id="{{ badgeInputId }}"
+        type="text"
+        name="{{ badgeLabelFlagPath }}"
+        class="sc-ca-badge-label-input"
+        value="{{ badgeLabel }}"
+        maxlength="{{ badgeLabelMaxLength }}"
+        placeholder="{{ strings.badgePlaceholder }}"
+        data-sc-ca-badge-input
+        {{#unless editable}}disabled{{/unless}}
+      >
+    </div>
+
+    <div class="sc-ca-preview" aria-live="polite">
+      <p class="sc-ca-preview-title">{{ strings.preview }}</p>
+      <div class="sc-ca-preview-row">
+        <span class="sc-ca-preview-label">{{ strings.previewBadge }}</span>
+        <span class="sc-ca-locked-label" data-sc-ca-preview-badge>{{ previewBadgeLabel }}</span>
+      </div>
+      <div class="sc-ca-preview-row sc-ca-preview-row--stacked">
+        <span class="sc-ca-preview-label">{{ strings.previewWarning }}</span>
+        <p class="notification warning sc-ca-preview-warning" data-sc-ca-preview-warning>
+          <i class="fas fa-triangle-exclamation"></i>
+          {{ previewWarningMessage }}
+        </p>
+      </div>
+    </div>
   </fieldset>
 </section>

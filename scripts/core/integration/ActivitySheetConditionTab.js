@@ -44,6 +44,7 @@ export class ActivitySheetConditionTab {
     ActivitySheetConditionTab.#addPart(sheetClass);
     ActivitySheetConditionTab.#wrapGetTabs(sheetClass);
     ActivitySheetConditionTab.#wrapPreparePartContext(sheetClass);
+    ActivitySheetConditionTab.#wrapOnRender(sheetClass);
     ActivitySheetConditionTab.#wrapPrepareSubmitData(sheetClass);
   }
 
@@ -96,6 +97,8 @@ export class ActivitySheetConditionTab {
       }
 
       const condition = ActivityConditionService.getCondition(this.activity);
+      const warningMessage = ActivityConditionService.getWarningMessage(this.activity);
+      const badgeLabel = ActivityConditionService.getBadgeLabel(this.activity);
       const validation = ActivityConditionService.validateCondition(condition);
       return foundry.utils.mergeObject(context ?? {}, {
         tab: context?.tabs?.condition ?? {
@@ -104,10 +107,20 @@ export class ActivitySheetConditionTab {
           cssClass: this.tabGroups?.sheet === "condition" ? "active" : ""
         },
         condition,
+        warningMessage,
+        badgeLabel,
+        warningInputId: `sc-ca-warning-message-${this.activity.id}`,
+        badgeInputId: `sc-ca-badge-label-${this.activity.id}`,
+        badgeLabelLength: badgeLabel.length,
+        badgeLabelMaxLength: Constants.BADGE_LABEL_MAX_LENGTH,
         conditionFlagPath: Constants.CONDITION_FLAG_PATH,
+        warningMessageFlagPath: Constants.WARNING_MESSAGE_FLAG_PATH,
+        badgeLabelFlagPath: Constants.BADGE_LABEL_FLAG_PATH,
         conditionWikiUrl: `${Constants.MODULE_WIKI_URL}#activity-condition`,
         conditionInvalid: !validation.valid,
         validationMessage: validation.error?.message ?? "",
+        previewBadgeLabel: ActivityConditionService.resolveConditionFailedBadgeLabel(badgeLabel),
+        previewWarningMessage: ActivityConditionService.resolveConditionFailedWarningMessage(warningMessage),
         strings: {
           label: Constants.localize("SCConditionalActivities.ConditionTab.Label", "Condition"),
           heading: Constants.localize("SCConditionalActivities.ConditionTab.Heading", "Activity condition"),
@@ -123,10 +136,52 @@ export class ActivitySheetConditionTab {
             "SCConditionalActivities.ConditionTab.Placeholder",
             "Example: return actor?.system?.attributes?.hp?.value > 0;"
           ),
+          warningLabel: Constants.localize("SCConditionalActivities.ConditionTab.WarningLabel", "Warning message"),
+          warningHint: Constants.localize(
+            "SCConditionalActivities.ConditionTab.WarningHint",
+            "Shown when the condition returns false. Leave blank to use the default warning."
+          ),
+          warningTooltip: Constants.localize(
+            "SCConditionalActivities.ConditionTab.WarningTooltip",
+            "Optional. If left blank, Conditional Activities uses the default warning text."
+          ),
+          warningPlaceholder: Constants.localize(
+            "SCConditionalActivities.ConditionTab.WarningPlaceholder",
+            "Example: You must be raging to use this ability."
+          ),
+          badgeLabel: Constants.localize("SCConditionalActivities.ConditionTab.BadgeLabel", "Locked badge label"),
+          badgeHint: Constants.localize(
+            "SCConditionalActivities.ConditionTab.BadgeHint",
+            "Single-line label shown on locked activities. Leave blank to use the default badge."
+          ),
+          badgeTooltip: Constants.localize(
+            "SCConditionalActivities.ConditionTab.BadgeTooltip",
+            "Optional. Maximum 36 characters. If left blank, Conditional Activities uses the default badge label."
+          ),
+          badgePlaceholder: Constants.localize(
+            "SCConditionalActivities.ConditionTab.BadgePlaceholder",
+            "Example: Requires Essence"
+          ),
+          charactersUsed: Constants.localize("SCConditionalActivities.ConditionTab.CharactersUsed", "characters"),
+          preview: Constants.localize("SCConditionalActivities.ConditionTab.Preview", "Preview"),
+          previewBadge: Constants.localize("SCConditionalActivities.ConditionTab.PreviewBadge", "Badge"),
+          previewWarning: Constants.localize("SCConditionalActivities.ConditionTab.PreviewWarning", "Warning"),
           wiki: Constants.localize("SCConditionalActivities.ConditionTab.Wiki", "Open wiki"),
           invalid: Constants.localize("SCConditionalActivities.ConditionTab.Invalid", "This condition has invalid code.")
         }
       }, { inplace: false });
+    };
+  }
+
+  static #wrapOnRender(sheetClass) {
+    const original = sheetClass.prototype._onRender;
+    if (typeof original !== "function") {
+      return;
+    }
+
+    sheetClass.prototype._onRender = async function(...args) {
+      await original.apply(this, args);
+      ActivitySheetConditionTab.#bindPreviewListeners(this.element);
     };
   }
 
@@ -138,11 +193,39 @@ export class ActivitySheetConditionTab {
 
     sheetClass.prototype._prepareSubmitData = function(event, formData) {
       const submitData = original.call(this, event, formData);
-      const condition = foundry.utils.getProperty(submitData, Constants.CONDITION_FLAG_PATH);
-      if (typeof condition === "string" && !condition.trim().length) {
-        foundry.utils.setProperty(submitData, Constants.CONDITION_FLAG_PATH, null);
-      }
+      ActivityConditionService.sanitizeFlagSubmitData(submitData);
       return submitData;
     };
+  }
+
+  static #bindPreviewListeners(root) {
+    if (!root?.querySelector) {
+      return;
+    }
+
+    const section = root.querySelector(".sc-ca-condition-tab");
+    if (!section) {
+      return;
+    }
+
+    const warningInput = section.querySelector("[data-sc-ca-warning-input]");
+    const badgeInput = section.querySelector("[data-sc-ca-badge-input]");
+    const badgePreview = section.querySelector("[data-sc-ca-preview-badge]");
+    const warningPreview = section.querySelector("[data-sc-ca-preview-warning]");
+    const counter = section.querySelector("[data-sc-ca-badge-counter]");
+
+    if (!warningInput || !badgeInput || !badgePreview || !warningPreview || !counter) {
+      return;
+    }
+
+    const syncPreview = () => {
+      counter.textContent = `${badgeInput.value.length}/${Constants.BADGE_LABEL_MAX_LENGTH}`;
+      badgePreview.textContent = ActivityConditionService.resolveConditionFailedBadgeLabel(badgeInput.value);
+      warningPreview.textContent = ActivityConditionService.resolveConditionFailedWarningMessage(warningInput.value);
+    };
+
+    warningInput.addEventListener("input", syncPreview);
+    badgeInput.addEventListener("input", syncPreview);
+    syncPreview();
   }
 }
