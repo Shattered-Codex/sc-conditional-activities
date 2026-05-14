@@ -14,8 +14,82 @@ export class ActivityConditionService {
     );
   }
 
+  static getWarningMessage(activity) {
+    return String(
+      activity?.getFlag?.(Constants.MODULE_ID, Constants.FLAG_WARNING_MESSAGE)
+      ?? foundry.utils.getProperty(activity ?? {}, Constants.WARNING_MESSAGE_FLAG_PATH)
+      ?? ""
+    );
+  }
+
+  static getBadgeLabel(activity) {
+    return String(
+      activity?.getFlag?.(Constants.MODULE_ID, Constants.FLAG_BADGE_LABEL)
+      ?? foundry.utils.getProperty(activity ?? {}, Constants.BADGE_LABEL_FLAG_PATH)
+      ?? ""
+    );
+  }
+
   static hasCondition(activity) {
     return ActivityConditionService.getCondition(activity).trim().length > 0;
+  }
+
+  static getConditionFailedBadgeLabel(activity) {
+    return ActivityConditionService.resolveConditionFailedBadgeLabel(
+      ActivityConditionService.getBadgeLabel(activity)
+    );
+  }
+
+  static resolveConditionFailedBadgeLabel(badgeLabel) {
+    return ActivityConditionService.#normalizeBadgeLabel(badgeLabel)
+      ?? Constants.localize("SCConditionalActivities.Badge.NotAvailable", "Not available");
+  }
+
+  static getConditionFailedWarningMessage(activity) {
+    return ActivityConditionService.resolveConditionFailedWarningMessage(
+      ActivityConditionService.getWarningMessage(activity)
+    );
+  }
+
+  static resolveConditionFailedWarningMessage(warningMessage) {
+    return ActivityConditionService.#normalizeWarningMessage(warningMessage)
+      ?? Constants.localize(
+        "SCConditionalActivities.Notifications.ConditionFailed",
+        "Not available. Conditions not matched."
+      );
+  }
+
+  static getConditionErrorBadgeLabel() {
+    return Constants.localize("SCConditionalActivities.Badge.ConditionError", "Condition error");
+  }
+
+  static getConditionErrorWarningMessage() {
+    return Constants.localize(
+      "SCConditionalActivities.Notifications.ConditionError",
+      "This activity's condition could not be evaluated."
+    );
+  }
+
+  static sanitizeFlagSubmitData(submitData) {
+    const condition = foundry.utils.getProperty(submitData, Constants.CONDITION_FLAG_PATH);
+    if (typeof condition === "string" && !condition.trim().length) {
+      foundry.utils.setProperty(submitData, Constants.CONDITION_FLAG_PATH, null);
+    }
+
+    foundry.utils.setProperty(
+      submitData,
+      Constants.WARNING_MESSAGE_FLAG_PATH,
+      ActivityConditionService.#normalizeWarningMessageForStorage(
+        foundry.utils.getProperty(submitData, Constants.WARNING_MESSAGE_FLAG_PATH)
+      )
+    );
+    foundry.utils.setProperty(
+      submitData,
+      Constants.BADGE_LABEL_FLAG_PATH,
+      ActivityConditionService.#normalizeBadgeLabel(
+        foundry.utils.getProperty(submitData, Constants.BADGE_LABEL_FLAG_PATH)
+      )
+    );
   }
 
   static validateCondition(code) {
@@ -117,5 +191,27 @@ ${body}`
       usage: foundry.utils.deepClone(usage ?? null),
       user: game.user ?? null
     };
+  }
+
+  static #normalizeWarningMessage(value) {
+    const normalized = ActivityConditionService.#normalizeWarningMessageForStorage(value);
+    return normalized ?? null;
+  }
+
+  static #normalizeWarningMessageForStorage(value) {
+    const source = String(value ?? "").replace(/\r\n/g, "\n").trim();
+    return source.length ? source : null;
+  }
+
+  static #normalizeBadgeLabel(value) {
+    const source = String(value ?? "")
+      .replace(/\r\n/g, " ")
+      .replace(/\n/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!source.length) {
+      return null;
+    }
+    return source.slice(0, Constants.BADGE_LABEL_MAX_LENGTH);
   }
 }

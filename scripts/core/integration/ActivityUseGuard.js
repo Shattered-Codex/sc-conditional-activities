@@ -41,13 +41,11 @@ export class ActivityUseGuard {
       });
 
       if (!result.available) {
-        const key = result.error
-          ? "SCConditionalActivities.Notifications.ConditionError"
-          : "SCConditionalActivities.Notifications.ConditionFailed";
-        const fallback = result.error
-          ? "This activity's condition could not be evaluated."
-          : "Not available. Conditions not matched.";
-        ui.notifications?.warn?.(Constants.localize(key, fallback));
+        ui.notifications?.warn?.(
+          result.error
+            ? ActivityConditionService.getConditionErrorWarningMessage()
+            : ActivityConditionService.getConditionFailedWarningMessage(this)
+        );
         return;
       }
 

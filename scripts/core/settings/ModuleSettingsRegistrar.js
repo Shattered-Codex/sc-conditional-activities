@@ -14,6 +14,11 @@ export class ModuleSettingsRegistrar {
 
     this.#registerSupportMenu();
     this.#registerDocumentationMenu();
+
+    Hooks.on("renderSettingsConfig", (_app, html) => {
+      SupportMenu.bindSettingsButton(html);
+      DocumentationMenu.bindSettingsButton(html);
+    });
   }
 
   #registerSupportMenu() {
@@ -28,10 +33,6 @@ export class ModuleSettingsRegistrar {
       type: SupportMenu,
       restricted: true
     });
-
-    Hooks.on("renderSettingsConfig", (_app, html) => {
-      SupportMenu.bindSettingsButton(html);
-    });
   }
 
   #registerDocumentationMenu() {
@@ -45,10 +46,6 @@ export class ModuleSettingsRegistrar {
       icon: "fas fa-hat-wizard",
       type: DocumentationMenu,
       restricted: true
-    });
-
-    Hooks.on("renderSettingsConfig", (_app, html) => {
-      DocumentationMenu.bindSettingsButton(html);
     });
   }
 }
