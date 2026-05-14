@@ -30,5 +30,4 @@ Hooks.once("ready", () => {
 Hooks.once("tidy5e-sheet.ready", () => {
   ActivitySheetConditionTab.activate();
   ActivityUseGuard.activate();
-  ActivityConditionBadges.activate();
 });

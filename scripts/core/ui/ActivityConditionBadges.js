@@ -235,11 +235,6 @@ export class ActivityConditionBadges {
     const tables = root.querySelectorAll(".inline-activities-table");
     for (const table of tables) {
       const rows = Array.from(table.querySelectorAll("[data-activity-id]"));
-      const hasConditionalActivities = rows.some((row) => {
-        const activity = resolveActivity(row);
-        return ActivityConditionService.hasCondition(activity);
-      });
-
       ActivityConditionBadges.#syncTidyItemActivityTableHeader(table, false);
       for (const row of rows) {
         ActivityConditionBadges.#syncTidyItemActivityRow(row, false);
