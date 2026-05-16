@@ -10,6 +10,9 @@
       "WarningHint": "Exibida quando a condição retornar false. Deixe em branco para usar o aviso padrão.",
       "WarningTooltip": "Opcional. Se ficar em branco, Conditional Activities usa a mensagem de aviso padrão.",
       "WarningPlaceholder": "Exemplo: Você precisa estar em fúria para usar esta habilidade.",
+      "DisableWarningLabel": "Desabilitar mensagem de aviso",
+      "DisableWarningHint": "Bloqueia a atividade sem mostrar a notificação de aviso quando a condição retornar false.",
+      "DisableWarningTooltip": "Erros na condição continuam avisando normalmente para facilitar identificar scripts inválidos.",
       "BadgeLabel": "Rótulo do badge de bloqueio",
       "BadgeHint": "Texto de uma linha exibido em atividades bloqueadas. Deixe em branco para usar o badge padrão.",
       "BadgeTooltip": "Opcional. Máximo de 36 caracteres. Se ficar em branco, Conditional Activities usa o rótulo padrão do badge.",
@@ -31,6 +34,10 @@
       "ConditionError": "A condição desta atividade não pôde ser avaliada."
     },
     "Settings": {
+      "HideUnavailableActivityChoices": {
+        "Name": "Ocultar atividades indisponíveis no diálogo de escolha",
+        "Hint": "Quando ativado, atividades bloqueadas por condições são removidas do diálogo de escolha de atividade."
+      },
       "SupportMenu": {
         "Name": "Apoiar o desenvolvedor",
         "Label": "Apoiar no Patreon",

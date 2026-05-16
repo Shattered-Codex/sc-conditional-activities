@@ -10,6 +10,9 @@
       "WarningHint": "Shown when the condition returns false. Leave blank to use the default warning.",
       "WarningTooltip": "Optional. If left blank, Conditional Activities uses the default warning text.",
       "WarningPlaceholder": "Example: You must be raging to use this ability.",
+      "DisableWarningLabel": "Disable warning message",
+      "DisableWarningHint": "Blocks the activity without showing the warning notification when the condition returns false.",
+      "DisableWarningTooltip": "Condition errors still warn normally so invalid scripts are easier to spot.",
       "BadgeLabel": "Locked badge label",
       "BadgeHint": "Single-line label shown on locked activities. Leave blank to use the default badge.",
       "BadgeTooltip": "Optional. Maximum 36 characters. If left blank, Conditional Activities uses the default badge label.",
@@ -31,6 +34,10 @@
       "ConditionError": "This activity's condition could not be evaluated."
     },
     "Settings": {
+      "HideUnavailableActivityChoices": {
+        "Name": "Hide unavailable activities in the choice dialog",
+        "Hint": "When enabled, activities blocked by conditions are removed from the activity choice dialog."
+      },
       "SupportMenu": {
         "Name": "Support the developer",
         "Label": "Patreon support",

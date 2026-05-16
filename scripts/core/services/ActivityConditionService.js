@@ -22,6 +22,14 @@ export class ActivityConditionService {
     );
   }
 
+  static getDisableWarningMessage(activity) {
+    return Boolean(
+      activity?.getFlag?.(Constants.MODULE_ID, Constants.FLAG_DISABLE_WARNING_MESSAGE)
+      ?? foundry.utils.getProperty(activity ?? {}, Constants.DISABLE_WARNING_MESSAGE_FLAG_PATH)
+      ?? false
+    );
+  }
+
   static getBadgeLabel(activity) {
     return String(
       activity?.getFlag?.(Constants.MODULE_ID, Constants.FLAG_BADGE_LABEL)
@@ -49,6 +57,10 @@ export class ActivityConditionService {
     return ActivityConditionService.resolveConditionFailedWarningMessage(
       ActivityConditionService.getWarningMessage(activity)
     );
+  }
+
+  static shouldShowConditionFailedWarningMessage(activity) {
+    return !ActivityConditionService.getDisableWarningMessage(activity);
   }
 
   static resolveConditionFailedWarningMessage(warningMessage) {
@@ -82,6 +94,11 @@ export class ActivityConditionService {
       ActivityConditionService.#normalizeWarningMessageForStorage(
         foundry.utils.getProperty(submitData, Constants.WARNING_MESSAGE_FLAG_PATH)
       )
+    );
+    foundry.utils.setProperty(
+      submitData,
+      Constants.DISABLE_WARNING_MESSAGE_FLAG_PATH,
+      Boolean(foundry.utils.getProperty(submitData, Constants.DISABLE_WARNING_MESSAGE_FLAG_PATH))
     );
     foundry.utils.setProperty(
       submitData,

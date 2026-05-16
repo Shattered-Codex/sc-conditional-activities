@@ -41,11 +41,14 @@ export class ActivityUseGuard {
       });
 
       if (!result.available) {
-        ui.notifications?.warn?.(
-          result.error
-            ? ActivityConditionService.getConditionErrorWarningMessage()
-            : ActivityConditionService.getConditionFailedWarningMessage(this)
-        );
+        const warningMessage = result.error
+          ? ActivityConditionService.getConditionErrorWarningMessage()
+          : ActivityConditionService.shouldShowConditionFailedWarningMessage(this)
+            ? ActivityConditionService.getConditionFailedWarningMessage(this)
+            : null;
+        if (warningMessage) {
+          ui.notifications?.warn?.(warningMessage);
+        }
         return;
       }
 

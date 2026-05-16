@@ -48,6 +48,27 @@
   font-size: var(--font-size-12, 12px);
 }
 
+.sc-ca-checkbox-field {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 700;
+}
+
+.sc-ca-checkbox-field span {
+  flex: 1 1 auto;
+}
+
+.sc-ca-checkbox-field input[type="checkbox"] {
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+.sc-ca-checkbox-field i {
+  color: var(--color-text-secondary, #8d8d8d);
+  font-size: var(--font-size-12, 12px);
+}
+
 .sc-ca-inline-meta {
   align-items: flex-start;
   flex-wrap: wrap;
