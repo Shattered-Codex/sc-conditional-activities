@@ -98,6 +98,7 @@ export class ActivitySheetConditionTab {
 
       const condition = ActivityConditionService.getCondition(this.activity);
       const warningMessage = ActivityConditionService.getWarningMessage(this.activity);
+      const disableWarningMessage = ActivityConditionService.getDisableWarningMessage(this.activity);
       const badgeLabel = ActivityConditionService.getBadgeLabel(this.activity);
       const validation = ActivityConditionService.validateCondition(condition);
       return foundry.utils.mergeObject(context ?? {}, {
@@ -108,13 +109,16 @@ export class ActivitySheetConditionTab {
         },
         condition,
         warningMessage,
+        disableWarningMessage,
         badgeLabel,
         warningInputId: `sc-ca-warning-message-${this.activity.id}`,
+        disableWarningInputId: `sc-ca-disable-warning-message-${this.activity.id}`,
         badgeInputId: `sc-ca-badge-label-${this.activity.id}`,
         badgeLabelLength: badgeLabel.length,
         badgeLabelMaxLength: Constants.BADGE_LABEL_MAX_LENGTH,
         conditionFlagPath: Constants.CONDITION_FLAG_PATH,
         warningMessageFlagPath: Constants.WARNING_MESSAGE_FLAG_PATH,
+        disableWarningMessageFlagPath: Constants.DISABLE_WARNING_MESSAGE_FLAG_PATH,
         badgeLabelFlagPath: Constants.BADGE_LABEL_FLAG_PATH,
         conditionWikiUrl: `${Constants.MODULE_WIKI_URL}#activity-condition`,
         conditionInvalid: !validation.valid,
@@ -148,6 +152,18 @@ export class ActivitySheetConditionTab {
           warningPlaceholder: Constants.localize(
             "SCConditionalActivities.ConditionTab.WarningPlaceholder",
             "Example: You must be raging to use this ability."
+          ),
+          disableWarningLabel: Constants.localize(
+            "SCConditionalActivities.ConditionTab.DisableWarningLabel",
+            "Disable warning message"
+          ),
+          disableWarningHint: Constants.localize(
+            "SCConditionalActivities.ConditionTab.DisableWarningHint",
+            "Blocks the activity without showing the warning notification when the condition returns false."
+          ),
+          disableWarningTooltip: Constants.localize(
+            "SCConditionalActivities.ConditionTab.DisableWarningTooltip",
+            "Condition errors still warn normally so invalid scripts are easier to spot."
           ),
           badgeLabel: Constants.localize("SCConditionalActivities.ConditionTab.BadgeLabel", "Locked badge label"),
           badgeHint: Constants.localize(

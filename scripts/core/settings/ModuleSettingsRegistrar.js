@@ -12,12 +12,31 @@ export class ModuleSettingsRegistrar {
     }
     this.#registered = true;
 
+    this.#registerHideUnavailableActivityChoicesSetting();
     this.#registerSupportMenu();
     this.#registerDocumentationMenu();
 
     Hooks.on("renderSettingsConfig", (_app, html) => {
       SupportMenu.bindSettingsButton(html);
       DocumentationMenu.bindSettingsButton(html);
+    });
+  }
+
+  #registerHideUnavailableActivityChoicesSetting() {
+    game.settings.register(Constants.MODULE_ID, ModuleSettings.SETTING_HIDE_UNAVAILABLE_ACTIVITY_CHOICES, {
+      name: Constants.localize(
+        "SCConditionalActivities.Settings.HideUnavailableActivityChoices.Name",
+        "Hide unavailable activities in the choice dialog"
+      ),
+      hint: Constants.localize(
+        "SCConditionalActivities.Settings.HideUnavailableActivityChoices.Hint",
+        "When enabled, activities blocked by conditions are removed from the activity choice dialog."
+      ),
+      scope: "world",
+      config: true,
+      type: Boolean,
+      default: false,
+      restricted: true
     });
   }
 

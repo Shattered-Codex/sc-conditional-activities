@@ -49,6 +49,21 @@
     </div>
 
     <div class="sc-ca-form-field">
+      <label class="sc-ca-checkbox-field" for="{{ disableWarningInputId }}">
+        <input
+          id="{{ disableWarningInputId }}"
+          type="checkbox"
+          name="{{ disableWarningMessageFlagPath }}"
+          {{#if disableWarningMessage}}checked{{/if}}
+          {{#unless editable}}disabled{{/unless}}
+        >
+        <span>{{ strings.disableWarningLabel }}</span>
+        <i class="fa-solid fa-circle-info" data-tooltip="{{ strings.disableWarningTooltip }}"></i>
+      </label>
+      <p class="hint">{{ strings.disableWarningHint }}</p>
+    </div>
+
+    <div class="sc-ca-form-field">
       <label class="sc-ca-field-label" for="{{ badgeInputId }}">
         <span>{{ strings.badgeLabel }}</span>
         <i class="fa-solid fa-circle-info" data-tooltip="{{ strings.badgeTooltip }}"></i>

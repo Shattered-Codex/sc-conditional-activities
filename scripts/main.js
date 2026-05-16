@@ -2,6 +2,7 @@ import { Constants } from "./core/Constants.js";
 import { ModuleSettingsRegistrar } from "./core/settings/ModuleSettingsRegistrar.js";
 import { ActivitySheetConditionTab } from "./core/integration/ActivitySheetConditionTab.js";
 import { ActivityUseGuard } from "./core/integration/ActivityUseGuard.js";
+import { ActivityChoiceVisibility } from "./core/integration/ActivityChoiceVisibility.js";
 import { ActivityConditionBadges } from "./core/ui/ActivityConditionBadges.js";
 
 Hooks.once("init", () => {
@@ -19,15 +20,18 @@ Hooks.once("setup", () => {
 
   ActivitySheetConditionTab.activate();
   ActivityUseGuard.activate();
+  ActivityChoiceVisibility.activate();
   ActivityConditionBadges.activate();
 });
 
 Hooks.once("ready", () => {
   ActivitySheetConditionTab.activate();
   ActivityUseGuard.activate();
+  ActivityChoiceVisibility.activate();
 });
 
 Hooks.once("tidy5e-sheet.ready", () => {
   ActivitySheetConditionTab.activate();
   ActivityUseGuard.activate();
+  ActivityChoiceVisibility.activate();
 });

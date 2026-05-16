@@ -4,10 +4,12 @@ export class Constants {
   static PATREON_URL = "https://www.patreon.com/c/shatteredcodex?utm_source=sc-conditional-activities&utm_medium=foundry_module&utm_campaign=support_button";
   static FLAG_CONDITION = "condition";
   static FLAG_WARNING_MESSAGE = "warningMessage";
+  static FLAG_DISABLE_WARNING_MESSAGE = "disableWarningMessage";
   static FLAG_BADGE_LABEL = "badgeLabel";
   static BADGE_LABEL_MAX_LENGTH = 36;
   static CONDITION_FLAG_PATH = `flags.${Constants.MODULE_ID}.${Constants.FLAG_CONDITION}`;
   static WARNING_MESSAGE_FLAG_PATH = `flags.${Constants.MODULE_ID}.${Constants.FLAG_WARNING_MESSAGE}`;
+  static DISABLE_WARNING_MESSAGE_FLAG_PATH = `flags.${Constants.MODULE_ID}.${Constants.FLAG_DISABLE_WARNING_MESSAGE}`;
   static BADGE_LABEL_FLAG_PATH = `flags.${Constants.MODULE_ID}.${Constants.FLAG_BADGE_LABEL}`;
 
   static localize(key, fallback = key) {
