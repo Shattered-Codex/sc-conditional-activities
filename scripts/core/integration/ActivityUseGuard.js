@@ -4,24 +4,31 @@ import { ActivityConditionService } from "../services/ActivityConditionService.j
 const PATCHED = Symbol.for(`${Constants.MODULE_ID}.ActivityUseGuard.patched`);
 
 export class ActivityUseGuard {
+  static #libWrapperTargets = new Set();
+
   static activate() {
     if (!Constants.isDnd5eActive()) {
       return;
     }
 
-    for (const documentClass of ActivityUseGuard.#getActivityDocumentClasses()) {
+    if (globalThis.libWrapper?.register) {
+      ActivityUseGuard.#installLibWrapperWrappers();
+      return;
+    }
+
+    for (const documentClass of ActivityUseGuard.#getActivityDocumentTargets().keys()) {
       ActivityUseGuard.#patchDocumentClass(documentClass);
     }
   }
 
-  static #getActivityDocumentClasses() {
-    const classes = new Set();
-    for (const config of Object.values(CONFIG?.DND5E?.activityTypes ?? {})) {
+  static #getActivityDocumentTargets() {
+    const targets = new Map();
+    for (const [activityType, config] of Object.entries(CONFIG?.DND5E?.activityTypes ?? {})) {
       if (typeof config?.documentClass === "function") {
-        classes.add(config.documentClass);
+        targets.set(config.documentClass, `CONFIG.DND5E.activityTypes.${activityType}.documentClass.prototype.use`);
       }
     }
-    return classes;
+    return targets;
   }
 
   static #patchDocumentClass(documentClass) {
@@ -33,26 +40,53 @@ export class ActivityUseGuard {
     prototype[PATCHED] = true;
     const original = prototype.use;
     prototype.use = async function(usage = {}, dialog = {}, message = {}) {
-      const result = await ActivityConditionService.evaluate(this, {
-        usage,
-        dialog,
-        message,
-        source: "use"
-      });
+      return ActivityUseGuard.#handleUse.call(this, original, usage, dialog, message);
+    };
+  }
 
-      if (!result.available) {
-        const warningMessage = result.error
-          ? ActivityConditionService.getConditionErrorWarningMessage()
-          : ActivityConditionService.shouldShowConditionFailedWarningMessage(this)
-            ? ActivityConditionService.getConditionFailedWarningMessage(this)
-            : null;
-        if (warningMessage) {
-          ui.notifications?.warn?.(warningMessage);
-        }
-        return;
+  static #installLibWrapperWrappers() {
+    for (const [documentClass, target] of ActivityUseGuard.#getActivityDocumentTargets()) {
+      if (ActivityUseGuard.#libWrapperTargets.has(target)) {
+        continue;
       }
 
-      return original.call(this, usage, dialog, message);
-    };
+      try {
+        globalThis.libWrapper.register(
+          Constants.MODULE_ID,
+          target,
+          function(wrapped, usage = {}, dialog = {}, message = {}) {
+            return ActivityUseGuard.#handleUse.call(this, wrapped, usage, dialog, message);
+          },
+          "WRAPPER"
+        );
+        ActivityUseGuard.#libWrapperTargets.add(target);
+      } catch (error) {
+        console.warn(`[${Constants.MODULE_ID}] could not wrap ${target}`, error);
+        ActivityUseGuard.#patchDocumentClass(documentClass);
+      }
+    }
+  }
+
+  static async #handleUse(wrapped, usage = {}, dialog = {}, message = {}) {
+    const result = await ActivityConditionService.evaluate(this, {
+      usage,
+      dialog,
+      message,
+      source: "use"
+    });
+
+    if (!result.available) {
+      const warningMessage = result.error
+        ? ActivityConditionService.getConditionErrorWarningMessage()
+        : ActivityConditionService.shouldShowConditionFailedWarningMessage(this)
+          ? ActivityConditionService.getConditionFailedWarningMessage(this)
+          : null;
+      if (warningMessage) {
+        ui.notifications?.warn?.(warningMessage);
+      }
+      return;
+    }
+
+    return wrapped.call(this, usage, dialog, message);
   }
 }
