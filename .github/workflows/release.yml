@@ -187,18 +187,19 @@ jobs:
             COMMIT_MESSAGE="Release published"
           fi
 
-          COMMIT_SUBJECT=$(printf '%s\n' "${COMMIT_MESSAGE}" | head -n 1)
-          COMMIT_BODY=$(printf '%s' "${COMMIT_MESSAGE}" | head -c 3200)
-          if [ "${#COMMIT_MESSAGE}" -gt "${#COMMIT_BODY}" ]; then
+          COMMIT_SUBJECT=$(printf '%s\n' "${COMMIT_MESSAGE}" | sed '1,/^$/d' | sed '/^[[:space:]]*$/d' | head -n 1)
+          if [ -z "${COMMIT_SUBJECT}" ]; then
+            COMMIT_SUBJECT=$(printf '%s\n' "${COMMIT_MESSAGE}" | head -n 1)
+          fi
+
+          COMMIT_BODY=$(printf '%s' "${COMMIT_SUBJECT}" | head -c 3200)
+          if [ "${#COMMIT_SUBJECT}" -gt "${#COMMIT_BODY}" ]; then
             COMMIT_BODY=$(printf '%s\n\n[truncated]' "${COMMIT_BODY}")
           fi
 
-          DESCRIPTION=$(printf '%s\n\n**Version:** `%s`\n**Commit:** %s\n**Repository:** %s\n**Release:** %s\n\n**Commit message**\n```text\n%s\n```' \
+          DESCRIPTION=$(printf '%s\n\n**Version:** `%s`\n\n```text\n%s\n```' \
             '**A new release has been published.**' \
             "${VERSION}" \
-            "${COMMIT_SUBJECT}" \
-            "${GITHUB_REPOSITORY}" \
-            "${RELEASE_URL}" \
             "${COMMIT_BODY}")
 
           payload=$(jq -n \
