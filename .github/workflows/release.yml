@@ -163,6 +163,7 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           VERSION: ${{ steps.tag_version.outputs.new_version }}
+          TAG: ${{ steps.tag_version.outputs.new_tag }}
           HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         shell: bash
         run: |
@@ -172,30 +173,74 @@ jobs:
           fi
 
           MODULE_TITLE=$(jq -r '.title // .id // env.MODULE_ID' module.json)
-          MERGE_MESSAGE=$(printf '%s\n' "${HEAD_COMMIT_MESSAGE}" | sed '1,/^$/d' | sed '/^[[:space:]]*$/d' | head -n 1)
+          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
+          COMMIT_MESSAGE=$(printf '%s' "${HEAD_COMMIT_MESSAGE}")
 
-          if [ -z "${MERGE_MESSAGE}" ]; then
-            MERGE_MESSAGE=$(gh api \
+          if [ -z "${COMMIT_MESSAGE}" ]; then
+            COMMIT_MESSAGE=$(gh api \
               -H "Accept: application/vnd.github+json" \
               "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
               --jq '.[0].title // empty' 2>/dev/null || true)
           fi
 
-          if [ -z "${MERGE_MESSAGE}" ]; then
-            MERGE_MESSAGE=$(printf '%s\n' "${HEAD_COMMIT_MESSAGE}" | head -n 1)
+          if [ -z "${COMMIT_MESSAGE}" ]; then
+            COMMIT_MESSAGE="Release published"
           fi
 
-          if [ -z "${MERGE_MESSAGE}" ]; then
-            MERGE_MESSAGE="Release published"
+          COMMIT_SUBJECT=$(printf '%s\n' "${COMMIT_MESSAGE}" | head -n 1)
+          COMMIT_BODY=$(printf '%s' "${COMMIT_MESSAGE}" | head -c 3200)
+          if [ "${#COMMIT_MESSAGE}" -gt "${#COMMIT_BODY}" ]; then
+            COMMIT_BODY="${COMMIT_BODY}
+
+[truncated]"
           fi
 
-          CONTENT=$(printf 'New Update:\n[%s][%s] %s' "${MODULE_TITLE}" "${VERSION}" "${MERGE_MESSAGE}")
-          payload=$(jq -n --arg content "${CONTENT}" '{content:$content}')
+          DESCRIPTION=$(cat <<EOF
+          **A new release has been published.**
 
-          curl -sSf \
-            -H "Content-Type: application/json" \
-            -d "${payload}" \
-            "${DISCORD_WEBHOOK_URL}"
+          **Version:** \`${VERSION}\`
+          **Commit:** ${COMMIT_SUBJECT}
+          **Repository:** ${GITHUB_REPOSITORY}
+          **Release:** ${RELEASE_URL}
+
+          **Commit message**
+          \`\`\`text
+          ${COMMIT_BODY}
+          \`\`\`
+          EOF
+          )
+
+          payload=$(jq -n \
+            --arg content "@everyone" \
+            --arg title "${MODULE_TITLE} v${VERSION}" \
+            --arg url "${RELEASE_URL}" \
+            --arg description "${DESCRIPTION}" \
+            '{
+              content: $content,
+              allowed_mentions: { parse: ["everyone"] },
+              embeds: [
+                {
+                  title: $title,
+                  url: $url,
+                  description: $description,
+                  color: 3447003,
+                  image: { url: "attachment://cover.webp" }
+                }
+              ]
+            }')
+
+          if [ -f "assets/img/cover.webp" ]; then
+            curl -sSf \
+              -F "payload_json=${payload}" \
+              -F "files[0]=@assets/img/cover.webp;filename=cover.webp;type=image/webp" \
+              "${DISCORD_WEBHOOK_URL}"
+          else
+            payload=$(printf '%s' "${payload}" | jq 'del(.embeds[0].image)')
+            curl -sSf \
+              -H "Content-Type: application/json" \
+              -d "${payload}" \
+              "${DISCORD_WEBHOOK_URL}"
+          fi
 
       - name: Upload artifacts to R2
         if: ${{ success() }}

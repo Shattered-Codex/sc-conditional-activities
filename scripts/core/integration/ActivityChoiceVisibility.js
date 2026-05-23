@@ -2,24 +2,31 @@ import { Constants } from "../Constants.js";
 import { ActivityConditionService } from "../services/ActivityConditionService.js";
 import { ModuleSettings } from "../settings/ModuleSettings.js";
 
-const PATCHED = Symbol.for(`${Constants.MODULE_ID}.ActivityChoiceVisibility.patched`);
+const ITEM_USE_PATCHED = Symbol.for(`${Constants.MODULE_ID}.ActivityChoiceVisibility.itemUsePatched`);
+const DIALOG_CREATE_PATCHED = Symbol.for(`${Constants.MODULE_ID}.ActivityChoiceVisibility.dialogCreatePatched`);
+const DIALOG_PREPARE_CONTEXT_PATCHED = Symbol.for(`${Constants.MODULE_ID}.ActivityChoiceVisibility.dialogPrepareContextPatched`);
 const VISIBLE_ACTIVITY_IDS_OPTION = `${Constants.MODULE_ID}.visibleActivityIds`;
+const ITEM_USE_TARGET = "dnd5e.documents.Item5e.prototype.use";
+const DIALOG_CREATE_TARGET = "dnd5e.applications.activity.ActivityChoiceDialog.create";
+const DIALOG_PREPARE_CONTEXT_TARGET = "dnd5e.applications.activity.ActivityChoiceDialog.prototype._prepareContext";
 
 export class ActivityChoiceVisibility {
+  static #libWrapperTargets = new Set();
+
   static activate() {
     if (!Constants.isDnd5eActive()) {
       return;
     }
 
-    const dialogClass = dnd5e?.applications?.activity?.ActivityChoiceDialog;
-    if (typeof dialogClass === "function") {
-      ActivityChoiceVisibility.#patchDialogClass(dialogClass);
+    if (globalThis.libWrapper?.register) {
+      ActivityChoiceVisibility.#installLibWrapperWrappers();
+      return;
     }
 
+    const dialogClass = dnd5e?.applications?.activity?.ActivityChoiceDialog;
     const itemClass = CONFIG?.Item?.documentClass;
-    if (typeof itemClass === "function") {
-      ActivityChoiceVisibility.#patchItemClass(itemClass);
-    }
+    ActivityChoiceVisibility.#patchDialogClass(dialogClass);
+    ActivityChoiceVisibility.#patchItemClass(itemClass);
   }
 
   static async #getActivityEntries(item) {
@@ -40,132 +47,182 @@ export class ActivityChoiceVisibility {
   }
 
   static #patchDialogClass(dialogClass) {
-    if (Object.prototype.hasOwnProperty.call(dialogClass, PATCHED)) {
-      return;
-    }
-
-    dialogClass[PATCHED] = true;
     ActivityChoiceVisibility.#wrapCreate(dialogClass);
     ActivityChoiceVisibility.#wrapPrepareContext(dialogClass);
   }
 
   static #wrapCreate(dialogClass) {
+    if (!dialogClass || Object.prototype.hasOwnProperty.call(dialogClass, DIALOG_CREATE_PATCHED)) {
+      return;
+    }
+
     const original = dialogClass.create;
     if (typeof original !== "function") {
       return;
     }
 
+    dialogClass[DIALOG_CREATE_PATCHED] = true;
     dialogClass.create = async function(item, options = {}) {
-      if (!ModuleSettings.hideUnavailableActivityChoices()) {
-        return original.call(this, item, options);
-      }
-
-      const visibleActivities = ActivityChoiceVisibility.#getVisibleActivitiesFromOptions(item, options);
-      if (visibleActivities) {
-        if (!visibleActivities.length) {
-          return null;
-        }
-
-        if (visibleActivities.length === 1) {
-          return visibleActivities[0];
-        }
-
-        return original.call(this, item, options);
-      }
-
-      const entries = await ActivityChoiceVisibility.#getActivityEntries(item);
-      const availableEntries = entries.filter(({ result }) => result.available);
-      if (!availableEntries.length) {
-        const unavailableEntry = entries.find(({ result }) => !result.available) ?? null;
-        ActivityChoiceVisibility.#warnUnavailableActivity(unavailableEntry?.activity ?? null, unavailableEntry?.result?.error ?? null);
-        return null;
-      }
-
-      const activities = availableEntries.map(({ activity }) => activity);
-      if (activities.length === 1) {
-        return activities[0];
-      }
-
-      return original.call(this, item, {
-        ...options,
-        [VISIBLE_ACTIVITY_IDS_OPTION]: activities.map((activity) => activity.id)
-      });
+      return ActivityChoiceVisibility.#handleDialogCreate.call(this, original, item, options);
     };
   }
 
   static #wrapPrepareContext(dialogClass) {
+    const prototype = dialogClass?.prototype;
+    if (!prototype || Object.prototype.hasOwnProperty.call(prototype, DIALOG_PREPARE_CONTEXT_PATCHED)) {
+      return;
+    }
+
     const original = dialogClass.prototype._prepareContext;
     if (typeof original !== "function") {
       return;
     }
 
+    prototype[DIALOG_PREPARE_CONTEXT_PATCHED] = true;
     dialogClass.prototype._prepareContext = async function(options) {
-      const context = await original.call(this, options);
-      const visibleActivities = ActivityChoiceVisibility.#getVisibleActivitiesFromOptions(this.item, this.options);
-      if (!visibleActivities || !Array.isArray(context?.activities)) {
-        return context;
-      }
-
-      const visibleIds = new Set(visibleActivities.map((activity) => activity.id));
-      return {
-        ...context,
-        activities: context.activities.filter((activity) => visibleIds.has(activity.id))
-      };
+      return ActivityChoiceVisibility.#handlePrepareContext.call(this, original, options);
     };
   }
 
   static #patchItemClass(itemClass) {
     const prototype = itemClass?.prototype;
-    if (!prototype || Object.prototype.hasOwnProperty.call(prototype, PATCHED) || typeof prototype.use !== "function") {
+    if (!prototype || Object.prototype.hasOwnProperty.call(prototype, ITEM_USE_PATCHED) || typeof prototype.use !== "function") {
       return;
     }
 
-    prototype[PATCHED] = true;
+    prototype[ITEM_USE_PATCHED] = true;
     const original = prototype.use;
     prototype.use = async function(config = {}, dialog = {}, message = {}) {
-      if (!ModuleSettings.hideUnavailableActivityChoices()) {
-        return original.call(this, config, dialog, message);
-      }
-
-      if (this.pack) {
-        return;
-      }
-
-      const entries = await ActivityChoiceVisibility.#getActivityEntries(this);
-      const rawActivities = entries.map(({ activity }) => activity);
-      const visibleActivities = entries
-        .filter(({ result }) => result.available)
-        .map(({ activity }) => activity);
-
-      if (visibleActivities.length) {
-        const { chooseActivity, ...activityConfig } = config;
-        let activity = visibleActivities[0];
-
-        if (((visibleActivities.length > 1) || chooseActivity) && !config?.event?.shiftKey) {
-          const dialogClass = dnd5e?.applications?.activity?.ActivityChoiceDialog;
-          activity = await dialogClass?.create?.(this, {
-            sheet: dialog?.options?.sheet,
-            [VISIBLE_ACTIVITY_IDS_OPTION]: visibleActivities.map((entry) => entry.id)
-          });
-        }
-
-        if (!activity) {
-          return;
-        }
-
-        return activity.use(activityConfig, dialog, message);
-      }
-
-      if (rawActivities.length) {
-        const unavailableEntry = entries.find(({ result }) => !result.available) ?? null;
-        ActivityChoiceVisibility.#warnUnavailableActivity(unavailableEntry?.activity ?? rawActivities[0], unavailableEntry?.result?.error ?? null);
-        return;
-      }
-
-      if (this.actor) {
-        return this.displayCard(message);
-      }
+      return ActivityChoiceVisibility.#handleItemUse.call(this, original, config, dialog, message);
     };
+  }
+
+  static #installLibWrapperWrappers() {
+    ActivityChoiceVisibility.#installLibWrapperWrapper(ITEM_USE_TARGET, function(wrapped, config = {}, dialog = {}, message = {}) {
+      return ActivityChoiceVisibility.#handleItemUse.call(this, wrapped, config, dialog, message);
+    }, () => ActivityChoiceVisibility.#patchItemClass(CONFIG?.Item?.documentClass));
+
+    ActivityChoiceVisibility.#installLibWrapperWrapper(DIALOG_CREATE_TARGET, function(wrapped, item, options = {}) {
+      return ActivityChoiceVisibility.#handleDialogCreate.call(this, wrapped, item, options);
+    }, () => ActivityChoiceVisibility.#wrapCreate(dnd5e?.applications?.activity?.ActivityChoiceDialog));
+
+    ActivityChoiceVisibility.#installLibWrapperWrapper(
+      DIALOG_PREPARE_CONTEXT_TARGET,
+      function(wrapped, options) {
+        return ActivityChoiceVisibility.#handlePrepareContext.call(this, wrapped, options);
+      },
+      () => ActivityChoiceVisibility.#wrapPrepareContext(dnd5e?.applications?.activity?.ActivityChoiceDialog)
+    );
+  }
+
+  static #installLibWrapperWrapper(target, wrapper, fallback) {
+    if (ActivityChoiceVisibility.#libWrapperTargets.has(target)) {
+      return;
+    }
+
+    try {
+      globalThis.libWrapper.register(Constants.MODULE_ID, target, wrapper, "WRAPPER");
+      ActivityChoiceVisibility.#libWrapperTargets.add(target);
+    } catch (error) {
+      console.warn(`[${Constants.MODULE_ID}] could not wrap ${target}`, error);
+      fallback?.();
+    }
+  }
+
+  static async #handleDialogCreate(wrapped, item, options = {}) {
+    if (!ModuleSettings.hideUnavailableActivityChoices()) {
+      return wrapped.call(this, item, options);
+    }
+
+    const visibleActivities = ActivityChoiceVisibility.#getVisibleActivitiesFromOptions(item, options);
+    if (visibleActivities) {
+      if (!visibleActivities.length) {
+        return null;
+      }
+
+      if (visibleActivities.length === 1) {
+        return visibleActivities[0];
+      }
+
+      return wrapped.call(this, item, options);
+    }
+
+    const entries = await ActivityChoiceVisibility.#getActivityEntries(item);
+    const availableEntries = entries.filter(({ result }) => result.available);
+    if (!availableEntries.length) {
+      const unavailableEntry = entries.find(({ result }) => !result.available) ?? null;
+      ActivityChoiceVisibility.#warnUnavailableActivity(unavailableEntry?.activity ?? null, unavailableEntry?.result?.error ?? null);
+      return null;
+    }
+
+    const activities = availableEntries.map(({ activity }) => activity);
+    if (activities.length === 1) {
+      return activities[0];
+    }
+
+    return wrapped.call(this, item, {
+      ...options,
+      [VISIBLE_ACTIVITY_IDS_OPTION]: activities.map((activity) => activity.id)
+    });
+  }
+
+  static async #handlePrepareContext(wrapped, options) {
+    const context = await wrapped.call(this, options);
+    const visibleActivities = ActivityChoiceVisibility.#getVisibleActivitiesFromOptions(this.item, this.options);
+    if (!visibleActivities || !Array.isArray(context?.activities)) {
+      return context;
+    }
+
+    const visibleIds = new Set(visibleActivities.map((activity) => activity.id));
+    return {
+      ...context,
+      activities: context.activities.filter((activity) => visibleIds.has(activity.id))
+    };
+  }
+
+  static async #handleItemUse(wrapped, config = {}, dialog = {}, message = {}) {
+    if (!ModuleSettings.hideUnavailableActivityChoices()) {
+      return wrapped.call(this, config, dialog, message);
+    }
+
+    if (this.pack) {
+      return;
+    }
+
+    const entries = await ActivityChoiceVisibility.#getActivityEntries(this);
+    const rawActivities = entries.map(({ activity }) => activity);
+    const visibleActivities = entries
+      .filter(({ result }) => result.available)
+      .map(({ activity }) => activity);
+
+    if (visibleActivities.length) {
+      const { chooseActivity, ...activityConfig } = config;
+      let activity = visibleActivities[0];
+
+      if (((visibleActivities.length > 1) || chooseActivity) && !config?.event?.shiftKey) {
+        const dialogClass = dnd5e?.applications?.activity?.ActivityChoiceDialog;
+        activity = await dialogClass?.create?.(this, {
+          sheet: dialog?.options?.sheet,
+          [VISIBLE_ACTIVITY_IDS_OPTION]: visibleActivities.map((entry) => entry.id)
+        });
+      }
+
+      if (!activity) {
+        return;
+      }
+
+      return activity.use(activityConfig, dialog, message);
+    }
+
+    if (rawActivities.length) {
+      const unavailableEntry = entries.find(({ result }) => !result.available) ?? null;
+      ActivityChoiceVisibility.#warnUnavailableActivity(unavailableEntry?.activity ?? rawActivities[0], unavailableEntry?.result?.error ?? null);
+      return;
+    }
+
+    if (this.actor) {
+      return this.displayCard(message);
+    }
   }
 
   static #getVisibleActivitiesFromOptions(item, options) {
