@@ -57,7 +57,7 @@ export class ActivityUseGuard {
           function(wrapped, usage = {}, dialog = {}, message = {}) {
             return ActivityUseGuard.#handleUse.call(this, wrapped, usage, dialog, message);
           },
-          "WRAPPER"
+          "MIXED"
         );
         ActivityUseGuard.#libWrapperTargets.add(target);
       } catch (error) {
