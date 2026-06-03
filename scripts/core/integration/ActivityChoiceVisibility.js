@@ -121,7 +121,7 @@ export class ActivityChoiceVisibility {
     }
 
     try {
-      globalThis.libWrapper.register(Constants.MODULE_ID, target, wrapper, "WRAPPER");
+      globalThis.libWrapper.register(Constants.MODULE_ID, target, wrapper, "MIXED");
       ActivityChoiceVisibility.#libWrapperTargets.add(target);
     } catch (error) {
       console.warn(`[${Constants.MODULE_ID}] could not wrap ${target}`, error);

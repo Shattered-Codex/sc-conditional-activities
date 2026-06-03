@@ -2,20 +2,6 @@
     "id": "sc-conditional-activities",
     "title": "SC - Conditional Activities",
     "version": "6.1.3",
-    "media": [
-        {
-            "type": "setup",
-            "url": "modules/sc-conditional-activities/assets/img/cover.webp",
-            "loop": false,
-            "flags": {}
-        },
-        {
-            "type": "cover",
-            "url": "modules/sc-conditional-activities/assets/img/cover.webp",
-            "loop": false,
-            "flags": {}
-        }
-    ],
     "authors": [
         {
             "name": "Gustavo Bacelar",

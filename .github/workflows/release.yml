@@ -96,6 +96,23 @@ jobs:
           git commit -m "chore: sync module manifest to ${{ steps.tag_version.outputs.new_version }}"
           git push https://x-access-token:${GH_TOKEN}@github.com/${{ github.repository }} HEAD:${GITHUB_REF#refs/heads/}
 
+      - name: Ensure CHANGELOG.md exists
+        run: |
+          if [ ! -f CHANGELOG.md ]; then
+            echo "No changelog yet." > CHANGELOG.md
+          fi
+
+      - name: Generate CHANGELOG.md
+        shell: bash
+        run: |
+          echo "Generating CHANGELOG.md from commits..."
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -z "$LAST_TAG" ]; then
+            git log --pretty=format:"* %s" > CHANGELOG.md
+          else
+            git log "$LAST_TAG"..HEAD --pretty=format:"* %s" > CHANGELOG.md
+          fi
+
       - name: Create ZIP archive
         shell: bash
         run: |
@@ -122,23 +139,6 @@ jobs:
 
           zip -r "./${MODULE_ID}.zip" "${FILES[@]}"
 
-      - name: Ensure CHANGELOG.md exists
-        run: |
-          if [ ! -f CHANGELOG.md ]; then
-            echo "No changelog yet." > CHANGELOG.md
-          fi
-
-      - name: Generate CHANGELOG.md
-        shell: bash
-        run: |
-          echo "Generating CHANGELOG.md from commits..."
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
-          if [ -z "$LAST_TAG" ]; then
-            git log --pretty=format:"* %s" > CHANGELOG.md
-          else
-            git log "$LAST_TAG"..HEAD --pretty=format:"* %s" > CHANGELOG.md
-          fi
-
       - name: Prepare release artifacts
         shell: bash
         run: |
@@ -163,8 +163,6 @@ jobs:
         env:
           DISCORD_WEBHOOK_URL: ${{ secrets.DISCORD_WEBHOOK_URL }}
           VERSION: ${{ steps.tag_version.outputs.new_version }}
-          TAG: ${{ steps.tag_version.outputs.new_tag }}
-          HEAD_COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
         shell: bash
         run: |
           if [ -z "${DISCORD_WEBHOOK_URL}" ]; then
@@ -173,10 +171,18 @@ jobs:
           fi
 
           MODULE_TITLE=$(jq -r '.title // .id // env.MODULE_ID' module.json)
-          RELEASE_URL="https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}"
-          COMMIT_MESSAGE=$(printf '%s' "${HEAD_COMMIT_MESSAGE}")
+          DOWNLOAD_HUB_URL="https://app.shattered-codex.com/"
+          RAW_COMMIT_MESSAGE=$(git log -1 --pretty=%B "${GITHUB_SHA}" 2>/dev/null || true)
+          COMMIT_MESSAGE=$(printf '%s' "${RAW_COMMIT_MESSAGE}")
 
-          if [ -z "${COMMIT_MESSAGE}" ]; then
+          if printf '%s\n' "${COMMIT_MESSAGE}" | head -n 1 | grep -q '^Merge pull request #'; then
+            MERGE_BODY=$(printf '%s\n' "${COMMIT_MESSAGE}" | sed '1,/^$/d')
+            if [ -n "${MERGE_BODY}" ]; then
+              COMMIT_MESSAGE="${MERGE_BODY}"
+            fi
+          fi
+
+          if [ -z "${COMMIT_MESSAGE//[$'\t\r\n ']}" ]; then
             COMMIT_MESSAGE=$(gh api \
               -H "Accept: application/vnd.github+json" \
               "/repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/pulls" \
@@ -187,13 +193,8 @@ jobs:
             COMMIT_MESSAGE="Release published"
           fi
 
-          COMMIT_SUBJECT=$(printf '%s\n' "${COMMIT_MESSAGE}" | sed '1,/^$/d' | sed '/^[[:space:]]*$/d' | head -n 1)
-          if [ -z "${COMMIT_SUBJECT}" ]; then
-            COMMIT_SUBJECT=$(printf '%s\n' "${COMMIT_MESSAGE}" | head -n 1)
-          fi
-
-          COMMIT_BODY=$(printf '%s' "${COMMIT_SUBJECT}" | head -c 3200)
-          if [ "${#COMMIT_SUBJECT}" -gt "${#COMMIT_BODY}" ]; then
+          COMMIT_BODY=$(printf '%s' "${COMMIT_MESSAGE}" | head -c 3800)
+          if [ "${#COMMIT_MESSAGE}" -gt "${#COMMIT_BODY}" ]; then
             COMMIT_BODY=$(printf '%s\n\n[truncated]' "${COMMIT_BODY}")
           fi
 
@@ -205,7 +206,7 @@ jobs:
           payload=$(jq -n \
             --arg content "@everyone" \
             --arg title "${MODULE_TITLE} v${VERSION}" \
-            --arg url "${RELEASE_URL}" \
+            --arg url "${DOWNLOAD_HUB_URL}" \
             --arg description "${DESCRIPTION}" \
             '{
               content: $content,
@@ -221,10 +222,17 @@ jobs:
               ]
             }')
 
+          COVER_IMAGE=""
           if [ -f "assets/img/cover.webp" ]; then
+            COVER_IMAGE="assets/img/cover.webp"
+          elif [ -f "assets/imgs/cover.webp" ]; then
+            COVER_IMAGE="assets/imgs/cover.webp"
+          fi
+
+          if [ -n "${COVER_IMAGE}" ]; then
             curl -sSf \
               -F "payload_json=${payload}" \
-              -F "files[0]=@assets/img/cover.webp;filename=cover.webp;type=image/webp" \
+              -F "files[0]=@${COVER_IMAGE};filename=cover.webp;type=image/webp" \
               "${DISCORD_WEBHOOK_URL}"
           else
             payload=$(printf '%s' "${payload}" | jq 'del(.embeds[0].image)')
