@@ -168,16 +168,44 @@ export class ActivityChoiceVisibility {
 
   static async #handlePrepareContext(wrapped, options) {
     const context = await wrapped.call(this, options);
-    const visibleActivities = ActivityChoiceVisibility.#getVisibleActivitiesFromOptions(this.item, this.options);
-    if (!visibleActivities || !Array.isArray(context?.activities)) {
+    if (!Array.isArray(context?.activities)) {
       return context;
     }
 
-    const visibleIds = new Set(visibleActivities.map((activity) => activity.id));
+    const visibleIds = await ActivityChoiceVisibility.#resolveVisibleActivityIds(this.item, this.options);
+    if (!visibleIds) {
+      return context;
+    }
+
     return {
       ...context,
       activities: context.activities.filter((activity) => visibleIds.has(activity.id))
     };
+  }
+
+  static async #resolveVisibleActivityIds(item, options) {
+    const fromOptions = ActivityChoiceVisibility.#getVisibleActivitiesFromOptions(item, options);
+    if (fromOptions) {
+      return new Set(fromOptions.map((activity) => activity.id));
+    }
+
+    // The dialog was opened without our visibility hint (e.g. by another module such as
+    // Midi-QOL wrapping Item5e#use). Evaluate the conditions here so unavailable activities
+    // are still hidden regardless of who created the dialog.
+    if (!ModuleSettings.hideUnavailableActivityChoices()) {
+      return null;
+    }
+
+    const entries = await ActivityChoiceVisibility.#getActivityEntries(item);
+    if (!entries.some(({ result }) => !result.available)) {
+      return null;
+    }
+
+    return new Set(
+      entries
+        .filter(({ result }) => result.available)
+        .map(({ activity }) => activity.id)
+    );
   }
 
   static async #handleItemUse(wrapped, config = {}, dialog = {}, message = {}) {
