@@ -3,6 +3,7 @@ import { ModuleSettingsRegistrar } from "./core/settings/ModuleSettingsRegistrar
 import { ActivitySheetConditionTab } from "./core/integration/ActivitySheetConditionTab.js";
 import { ActivityUseGuard } from "./core/integration/ActivityUseGuard.js";
 import { ActivityChoiceVisibility } from "./core/integration/ActivityChoiceVisibility.js";
+import { MidiQolActivityChoice } from "./core/integration/MidiQolActivityChoice.js";
 import { ActivityConditionBadges } from "./core/ui/ActivityConditionBadges.js";
 
 Hooks.once("init", () => {
@@ -21,6 +22,7 @@ Hooks.once("setup", () => {
   ActivitySheetConditionTab.activate();
   ActivityUseGuard.activate();
   ActivityChoiceVisibility.activate();
+  MidiQolActivityChoice.activate();
   ActivityConditionBadges.activate();
 });
 
@@ -28,6 +30,7 @@ Hooks.once("ready", () => {
   ActivitySheetConditionTab.activate();
   ActivityUseGuard.activate();
   ActivityChoiceVisibility.activate();
+  MidiQolActivityChoice.activate();
 });
 
 Hooks.once("tidy5e-sheet.ready", () => {
