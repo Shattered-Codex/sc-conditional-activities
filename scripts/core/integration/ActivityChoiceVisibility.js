@@ -213,6 +213,15 @@ export class ActivityChoiceVisibility {
       return wrapped.call(this, config, dialog, message);
     }
 
+    // Midi-QOL re-implements Item5e#use (doItemUse) with its own activity choice
+    // dialog, usability filters and skip-keybind fast paths. Re-implementing the
+    // flow here as well would fight over the dialog, so defer to Midi's flow;
+    // filtering happens through the midi-qol.itemUseActivitySelect hook instead
+    // (see MidiQolActivityChoice).
+    if (globalThis.MidiQOL ?? game.modules.get("midi-qol")?.active) {
+      return wrapped.call(this, config, dialog, message);
+    }
+
     if (this.pack) {
       return;
     }
@@ -259,9 +268,13 @@ export class ActivityChoiceVisibility {
       return null;
     }
 
-    return ids
+    const activities = ids
       .map((id) => item?.system?.activities?.get?.(id) ?? null)
       .filter((activity) => activity);
+    // If none of the ids resolve on this item (e.g. cloned/enchanted copies with
+    // regenerated activity ids), treat the hint as absent so callers fall back to
+    // evaluating conditions instead of silently showing nothing.
+    return activities.length ? activities : null;
   }
 
   static #warnUnavailableActivity(activity, error) {
