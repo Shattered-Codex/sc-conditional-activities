@@ -9,9 +9,15 @@ const TIDY_ITEM_INLINE_LOCKED_CLASS = "sc-ca-tidy-item-inline-locked";
 const TIDY_LOCKED_ROW_CLASS = "sc-ca-tidy-locked-row";
 const ACTIVITY_CHOICE_BADGE_ROW_CLASS = "sc-ca-choice-badge-row";
 const LOCKED_CLASS = "sc-ca-locked";
+const TIDY_INLINE_GRID_TEMPLATE = "/* Name */ 1fr /* Status */ 9rem /* Uses */ 2.5rem /* Usage */ 5rem";
 
 export class ActivityConditionBadges {
   static #handlers = new Map();
+  static #openSurfaces = new Map();
+  static #openChoiceDialogs = new Map();
+  static #evaluationRevision = 0;
+  static #elementRequests = new WeakMap();
+  static #nextElementRequestId = 0;
 
   static activate() {
     if (ActivityConditionBadges.#handlers.size) {
@@ -43,6 +49,45 @@ export class ActivityConditionBadges {
     ActivityConditionBadges.#bind("renderChatMessageHTML", (_message, html) => {
       void ActivityConditionBadges.#decorateChatMessage(html);
     });
+    const closeHandler = (app) => {
+      ActivityConditionBadges.#openSurfaces.delete(app);
+      ActivityConditionBadges.#openChoiceDialogs.delete(app);
+    };
+    ActivityConditionBadges.#bind("closeApplication", closeHandler);
+    ActivityConditionBadges.#bind("closeApplicationV2", closeHandler);
+  }
+
+  static deactivate() {
+    for (const [hook, handler] of ActivityConditionBadges.#handlers) {
+      Hooks.off(hook, handler);
+    }
+    ActivityConditionBadges.#handlers.clear();
+    ActivityConditionBadges.#openSurfaces.clear();
+    ActivityConditionBadges.#openChoiceDialogs.clear();
+    ActivityConditionBadges.invalidateEvaluations();
+    ActivityConditionBadges.#elementRequests = new WeakMap();
+    ActivityConditionBadges.#nextElementRequestId = 0;
+  }
+
+  static invalidateEvaluations() {
+    ActivityConditionBadges.#evaluationRevision += 1;
+    return ActivityConditionBadges.#evaluationRevision;
+  }
+
+  static async refreshOpenSurfaces(revision = ActivityConditionBadges.#evaluationRevision) {
+    if (revision !== ActivityConditionBadges.#evaluationRevision) {
+      return;
+    }
+
+    ActivityConditionBadges.#pruneOpenViews();
+    const evaluationCache = new Map();
+    const surfaceRefreshes = Array.from(ActivityConditionBadges.#openSurfaces.values(), (surface) =>
+      ActivityConditionBadges.#decorateSurface(surface, { revision, evaluationCache })
+    );
+    const dialogRefreshes = Array.from(ActivityConditionBadges.#openChoiceDialogs.values(), ({ app, root }) =>
+      ActivityConditionBadges.#decorateActivityChoiceDialog(app, root, { revision, evaluationCache })
+    );
+    await Promise.allSettled([...surfaceRefreshes, ...dialogRefreshes]);
   }
 
   static #bind(hook, handler) {
@@ -50,19 +95,30 @@ export class ActivityConditionBadges {
     ActivityConditionBadges.#handlers.set(hook, handler);
   }
 
-  static async #decorateActivityChoiceDialog(app, html) {
+  static async #decorateActivityChoiceDialog(
+    app,
+    html,
+    {
+      revision = ActivityConditionBadges.#evaluationRevision,
+      evaluationCache = new Map()
+    } = {}
+  ) {
     const root = ActivityConditionBadges.#resolveRoot(html ?? app?.element);
     const item = app?.item ?? null;
     if (!root || !item) {
       return;
     }
 
+    ActivityConditionBadges.#openChoiceDialogs.set(app, { app, root });
     const buttons = root.querySelectorAll("[data-action='choose'][data-activity-id]");
     await Promise.all(Array.from(buttons).map(async (button) => {
       const activity = item.system?.activities?.get?.(button.dataset.activityId);
-      await ActivityConditionBadges.#decorateElement(button, activity, {
-        activityChoiceBadgeRow: true
-      });
+      await ActivityConditionBadges.#decorateElement(
+        button,
+        activity,
+        { activityChoiceBadgeRow: true },
+        { revision, evaluationCache }
+      );
     }));
   }
 
@@ -73,12 +129,11 @@ export class ActivityConditionBadges {
       return;
     }
 
-    ActivityConditionBadges.#prepareTidyActivityTables(root, (row) => item.system?.activities?.get?.(row.dataset.activityId) ?? null);
-    const rows = root.querySelectorAll("[data-activity-id]");
-    await Promise.all(Array.from(rows).map(async (row) => {
-      const activity = item.system?.activities?.get?.(row.dataset.activityId);
-      await ActivityConditionBadges.#decorateElement(row, activity, { sheetKind: "item" });
-    }));
+    ActivityConditionBadges.#registerOpenSurface(app, root, "item");
+    await ActivityConditionBadges.#decorateSurface(
+      { app, root, kind: "item" },
+      { revision: ActivityConditionBadges.#evaluationRevision }
+    );
   }
 
   static async #decorateActorSheet(app, html) {
@@ -88,12 +143,11 @@ export class ActivityConditionBadges {
       return;
     }
 
-    ActivityConditionBadges.#prepareTidyActivityTables(root, (row) => ActivityConditionBadges.#resolveActivityFromActorRow(actor, row));
-    const rows = root.querySelectorAll("[data-activity-id]");
-    await Promise.all(Array.from(rows).map(async (row) => {
-      const activity = ActivityConditionBadges.#resolveActivityFromActorRow(actor, row);
-      await ActivityConditionBadges.#decorateElement(row, activity, { sheetKind: "actor" });
-    }));
+    ActivityConditionBadges.#registerOpenSurface(app, root, "actor");
+    await ActivityConditionBadges.#decorateSurface(
+      { app, root, kind: "actor" },
+      { revision: ActivityConditionBadges.#evaluationRevision }
+    );
   }
 
   static async #decorateTidySheetTab(app, html, newTabId) {
@@ -126,18 +180,73 @@ export class ActivityConditionBadges {
     const rows = root.querySelectorAll("[data-activity-uuid], [data-activity-id]");
     await Promise.all(Array.from(rows).map(async (row) => {
       const activity = await ActivityConditionBadges.#resolveActivityFromElement(row);
-      await ActivityConditionBadges.#decorateElement(row, activity);
+      // Chat badges are historical and are intentionally not refreshed when targets change.
+      await ActivityConditionBadges.#decorateElement(row, activity, {}, { revision: null });
     }));
   }
 
-  static async #decorateElement(element, activity, { labelTarget = null, sheetKind = null, activityChoiceBadgeRow = false } = {}) {
-    ActivityConditionBadges.#clearElement(element);
-    if (!activity || !ActivityConditionService.hasCondition(activity)) {
+  static async #decorateSurface(surface, { revision, evaluationCache = new Map() }) {
+    const { app, root, kind } = surface;
+    if (!root?.isConnected || revision !== ActivityConditionBadges.#evaluationRevision) {
       return;
     }
 
-    const result = await ActivityConditionService.evaluate(activity, { source: "ui" });
+    const document = kind === "actor"
+      ? app?.actor ?? app?.document ?? null
+      : app?.item ?? app?.document ?? null;
+    if (!document) {
+      return;
+    }
+
+    const resolveActivity = kind === "actor"
+      ? (row) => ActivityConditionBadges.#resolveActivityFromActorRow(document, row)
+      : (row) => document.system?.activities?.get?.(row.dataset.activityId) ?? null;
+    ActivityConditionBadges.#prepareTidyActivityTables(root, resolveActivity);
+
+    const rows = root.querySelectorAll("[data-activity-id]");
+    await Promise.allSettled(Array.from(rows, async (row) => {
+      const activity = resolveActivity(row);
+      await ActivityConditionBadges.#decorateElement(
+        row,
+        activity,
+        { sheetKind: kind },
+        { revision, evaluationCache }
+      );
+    }));
+  }
+
+  static async #decorateElement(
+    element,
+    activity,
+    { labelTarget = null, sheetKind = null, activityChoiceBadgeRow = false } = {},
+    {
+      revision = ActivityConditionBadges.#evaluationRevision,
+      evaluationCache = new Map()
+    } = {}
+  ) {
+    const requestId = ++ActivityConditionBadges.#nextElementRequestId;
+    ActivityConditionBadges.#elementRequests.set(element, requestId);
+
+    if (!activity || !ActivityConditionService.hasCondition(activity)) {
+      if (ActivityConditionBadges.#canApplyResult(element, revision, requestId)) {
+        ActivityConditionBadges.#clearElement(element);
+      }
+      return;
+    }
+
+    const evaluationKey = activity.uuid ?? activity;
+    let evaluation = evaluationCache.get(evaluationKey);
+    if (!evaluation) {
+      evaluation = ActivityConditionService.evaluate(activity, { source: "ui" });
+      evaluationCache.set(evaluationKey, evaluation);
+    }
+    const result = await evaluation;
+    if (!ActivityConditionBadges.#canApplyResult(element, revision, requestId)) {
+      return;
+    }
+
     if (result.available) {
+      ActivityConditionBadges.#clearElement(element);
       return;
     }
 
@@ -148,31 +257,13 @@ export class ActivityConditionBadges {
       ? ActivityConditionService.getConditionErrorWarningMessage()
       : ActivityConditionService.getConditionFailedWarningMessage(activity);
 
-    element.classList.add(LOCKED_CLASS);
-    element.setAttribute("data-sc-ca-locked", "true");
-    element.setAttribute("data-tooltip", tooltip);
-
-    const badge = document.createElement("span");
-    badge.className = BADGE_CLASS;
-    badge.textContent = label;
-    badge.title = tooltip;
-
     const tidyItemCardTarget = ActivityConditionBadges.#getTidyItemCardLabelTarget(element);
-    if (tidyItemCardTarget) {
-      element.classList.add(TIDY_ITEM_CARD_LOCKED_CLASS);
-    }
-
     const tidyInlineVisualRow = ActivityConditionBadges.#getTidyInlineVisualRow(element, sheetKind);
     const tidyItemInlineTarget = ActivityConditionBadges.#getTidyItemInlineBadgeTarget(element, sheetKind, tidyInlineVisualRow);
     const tidyPrimaryCell = sheetKind === "actor" ? ActivityConditionBadges.#getTidyPrimaryCell(element) : null;
     const activityChoiceTarget = activityChoiceBadgeRow
       ? ActivityConditionBadges.#getActivityChoiceBadgeTarget(element)
       : null;
-    if (tidyItemInlineTarget) {
-      (tidyInlineVisualRow ?? element).classList.add(TIDY_ITEM_INLINE_LOCKED_CLASS);
-    } else if (tidyPrimaryCell) {
-      (tidyInlineVisualRow ?? element).classList.add(TIDY_LOCKED_ROW_CLASS);
-    }
 
     const target = labelTarget
       ?? activityChoiceTarget
@@ -184,22 +275,52 @@ export class ActivityConditionBadges {
       ?? element.querySelector(".name")
       ?? element.querySelector(".activity-name")
       ?? element;
-    target.appendChild(badge);
+
+    const ownedBadges = ActivityConditionBadges.#getOwnedBadges(element);
+    const currentBadge = ownedBadges.shift() ?? document.createElement("span");
+    for (const duplicate of ownedBadges) {
+      duplicate.remove();
+    }
+
+    ActivityConditionBadges.#toggleClass(element, LOCKED_CLASS, true);
+    ActivityConditionBadges.#toggleClass(element, TIDY_ITEM_CARD_LOCKED_CLASS, Boolean(tidyItemCardTarget));
+    ActivityConditionBadges.#toggleClass(element, TIDY_ITEM_INLINE_LOCKED_CLASS, !tidyInlineVisualRow && Boolean(tidyItemInlineTarget));
+    ActivityConditionBadges.#toggleClass(element, TIDY_LOCKED_ROW_CLASS, !tidyInlineVisualRow && !tidyItemInlineTarget && Boolean(tidyPrimaryCell));
+    if (tidyInlineVisualRow) {
+      ActivityConditionBadges.#toggleClass(tidyInlineVisualRow, TIDY_ITEM_INLINE_LOCKED_CLASS, Boolean(tidyItemInlineTarget));
+      ActivityConditionBadges.#toggleClass(tidyInlineVisualRow, TIDY_LOCKED_ROW_CLASS, !tidyItemInlineTarget && Boolean(tidyPrimaryCell));
+    }
+    ActivityConditionBadges.#setAttribute(element, "data-sc-ca-locked", "true");
+    ActivityConditionBadges.#setAttribute(element, "data-tooltip", tooltip);
+
+    if (!currentBadge.classList.contains(BADGE_CLASS)) {
+      currentBadge.className = BADGE_CLASS;
+    }
+    if (currentBadge.textContent !== label) {
+      currentBadge.textContent = label;
+    }
+    if (currentBadge.title !== tooltip) {
+      currentBadge.title = tooltip;
+    }
+    if (currentBadge.parentElement !== target) {
+      target.appendChild(currentBadge);
+    }
   }
 
   static #clearElement(element) {
     const tidyInlineVisualRow = ActivityConditionBadges.#getTidyInlineVisualRow(element);
-    element.classList.remove(LOCKED_CLASS);
-    element.classList.remove(TIDY_ITEM_CARD_LOCKED_CLASS);
-    element.classList.remove(TIDY_ITEM_INLINE_LOCKED_CLASS);
-    element.classList.remove(TIDY_LOCKED_ROW_CLASS);
-    tidyInlineVisualRow?.classList.remove(TIDY_ITEM_INLINE_LOCKED_CLASS, TIDY_LOCKED_ROW_CLASS);
-    element.removeAttribute("data-sc-ca-locked");
-    element.removeAttribute("data-tooltip");
-    for (const badge of element.querySelectorAll(`.${BADGE_CLASS}`)) {
-      if (badge.closest("[data-activity-id]") === element || badge.closest("[data-action='choose'][data-activity-id]") === element) {
-        badge.remove();
-      }
+    ActivityConditionBadges.#toggleClass(element, LOCKED_CLASS, false);
+    ActivityConditionBadges.#toggleClass(element, TIDY_ITEM_CARD_LOCKED_CLASS, false);
+    ActivityConditionBadges.#toggleClass(element, TIDY_ITEM_INLINE_LOCKED_CLASS, false);
+    ActivityConditionBadges.#toggleClass(element, TIDY_LOCKED_ROW_CLASS, false);
+    if (tidyInlineVisualRow) {
+      ActivityConditionBadges.#toggleClass(tidyInlineVisualRow, TIDY_ITEM_INLINE_LOCKED_CLASS, false);
+      ActivityConditionBadges.#toggleClass(tidyInlineVisualRow, TIDY_LOCKED_ROW_CLASS, false);
+    }
+    ActivityConditionBadges.#removeAttribute(element, "data-sc-ca-locked");
+    ActivityConditionBadges.#removeAttribute(element, "data-tooltip");
+    for (const badge of ActivityConditionBadges.#getOwnedBadges(element)) {
+      badge.remove();
     }
     for (const row of element.querySelectorAll(`.${ACTIVITY_CHOICE_BADGE_ROW_CLASS}`)) {
       if (row.closest("[data-action='choose'][data-activity-id]") === element) {
@@ -320,10 +441,9 @@ export class ActivityConditionBadges {
       table.dataset.scCaOriginalGridTemplateColumns = table.style.getPropertyValue("--grid-template-columns");
     }
 
-    table.style.setProperty(
-      "--grid-template-columns",
-      "/* Name */ 1fr /* Status */ 9rem /* Uses */ 2.5rem /* Usage */ 5rem"
-    );
+    if (table.style.getPropertyValue("--grid-template-columns") !== TIDY_INLINE_GRID_TEMPLATE) {
+      table.style.setProperty("--grid-template-columns", TIDY_INLINE_GRID_TEMPLATE);
+    }
   }
 
   static #syncTidyInlineActivityRow(row, enabled) {
@@ -481,5 +601,56 @@ export class ActivityConditionBadges {
       return html;
     }
     return null;
+  }
+
+  static #registerOpenSurface(app, root, kind) {
+    if (!app || !root) {
+      return;
+    }
+    ActivityConditionBadges.#openSurfaces.set(app, { app, root, kind });
+  }
+
+  static #pruneOpenViews() {
+    for (const [app, surface] of ActivityConditionBadges.#openSurfaces) {
+      if (!surface.root?.isConnected) {
+        ActivityConditionBadges.#openSurfaces.delete(app);
+      }
+    }
+    for (const [app, dialog] of ActivityConditionBadges.#openChoiceDialogs) {
+      if (!dialog.root?.isConnected) {
+        ActivityConditionBadges.#openChoiceDialogs.delete(app);
+      }
+    }
+  }
+
+  static #canApplyResult(element, revision, requestId) {
+    return Boolean(element?.isConnected)
+      && (revision === null || revision === ActivityConditionBadges.#evaluationRevision)
+      && ActivityConditionBadges.#elementRequests.get(element) === requestId;
+  }
+
+  static #getOwnedBadges(element) {
+    return Array.from(element.querySelectorAll(`.${BADGE_CLASS}`)).filter((badge) =>
+      badge.closest("[data-activity-id]") === element
+      || badge.closest("[data-action='choose'][data-activity-id]") === element
+    );
+  }
+
+  static #toggleClass(element, className, enabled) {
+    if (element.classList.contains(className) !== enabled) {
+      element.classList.toggle(className, enabled);
+    }
+  }
+
+  static #setAttribute(element, name, value) {
+    if (element.getAttribute(name) !== value) {
+      element.setAttribute(name, value);
+    }
+  }
+
+  static #removeAttribute(element, name) {
+    if (element.hasAttribute(name)) {
+      element.removeAttribute(name);
+    }
   }
 }

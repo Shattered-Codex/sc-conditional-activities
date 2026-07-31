@@ -5,6 +5,7 @@ import { ActivityUseGuard } from "./core/integration/ActivityUseGuard.js";
 import { ActivityChoiceVisibility } from "./core/integration/ActivityChoiceVisibility.js";
 import { MidiQolActivityChoice } from "./core/integration/MidiQolActivityChoice.js";
 import { ActivityConditionBadges } from "./core/ui/ActivityConditionBadges.js";
+import { TargetSelectionBadgeRefresh } from "./core/ui/TargetSelectionBadgeRefresh.js";
 
 Hooks.once("init", () => {
   const settings = new ModuleSettingsRegistrar();
@@ -24,6 +25,7 @@ Hooks.once("setup", () => {
   ActivityChoiceVisibility.activate();
   MidiQolActivityChoice.activate();
   ActivityConditionBadges.activate();
+  TargetSelectionBadgeRefresh.activate();
 });
 
 Hooks.once("ready", () => {
