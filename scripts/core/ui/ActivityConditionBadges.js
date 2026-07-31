@@ -14,6 +14,7 @@ const TIDY_INLINE_GRID_TEMPLATE = "/* Name */ 1fr /* Status */ 9rem /* Uses */ 2
 export class ActivityConditionBadges {
   static #handlers = new Map();
   static #openSurfaces = new Map();
+  static #openChoiceDialogs = new Map();
   static #evaluationRevision = 0;
   static #elementRequests = new WeakMap();
   static #nextElementRequestId = 0;
@@ -50,6 +51,7 @@ export class ActivityConditionBadges {
     });
     const closeHandler = (app) => {
       ActivityConditionBadges.#openSurfaces.delete(app);
+      ActivityConditionBadges.#openChoiceDialogs.delete(app);
     };
     ActivityConditionBadges.#bind("closeApplication", closeHandler);
     ActivityConditionBadges.#bind("closeApplicationV2", closeHandler);
@@ -61,6 +63,7 @@ export class ActivityConditionBadges {
     }
     ActivityConditionBadges.#handlers.clear();
     ActivityConditionBadges.#openSurfaces.clear();
+    ActivityConditionBadges.#openChoiceDialogs.clear();
     ActivityConditionBadges.invalidateEvaluations();
     ActivityConditionBadges.#elementRequests = new WeakMap();
     ActivityConditionBadges.#nextElementRequestId = 0;
@@ -76,12 +79,15 @@ export class ActivityConditionBadges {
       return;
     }
 
-    ActivityConditionBadges.#pruneOpenSurfaces();
+    ActivityConditionBadges.#pruneOpenViews();
     const evaluationCache = new Map();
-    const refreshes = Array.from(ActivityConditionBadges.#openSurfaces.values(), (surface) =>
+    const surfaceRefreshes = Array.from(ActivityConditionBadges.#openSurfaces.values(), (surface) =>
       ActivityConditionBadges.#decorateSurface(surface, { revision, evaluationCache })
     );
-    await Promise.allSettled(refreshes);
+    const dialogRefreshes = Array.from(ActivityConditionBadges.#openChoiceDialogs.values(), ({ app, root }) =>
+      ActivityConditionBadges.#decorateActivityChoiceDialog(app, root, { revision, evaluationCache })
+    );
+    await Promise.allSettled([...surfaceRefreshes, ...dialogRefreshes]);
   }
 
   static #bind(hook, handler) {
@@ -89,19 +95,30 @@ export class ActivityConditionBadges {
     ActivityConditionBadges.#handlers.set(hook, handler);
   }
 
-  static async #decorateActivityChoiceDialog(app, html) {
+  static async #decorateActivityChoiceDialog(
+    app,
+    html,
+    {
+      revision = ActivityConditionBadges.#evaluationRevision,
+      evaluationCache = new Map()
+    } = {}
+  ) {
     const root = ActivityConditionBadges.#resolveRoot(html ?? app?.element);
     const item = app?.item ?? null;
     if (!root || !item) {
       return;
     }
 
+    ActivityConditionBadges.#openChoiceDialogs.set(app, { app, root });
     const buttons = root.querySelectorAll("[data-action='choose'][data-activity-id]");
     await Promise.all(Array.from(buttons).map(async (button) => {
       const activity = item.system?.activities?.get?.(button.dataset.activityId);
-      await ActivityConditionBadges.#decorateElement(button, activity, {
-        activityChoiceBadgeRow: true
-      });
+      await ActivityConditionBadges.#decorateElement(
+        button,
+        activity,
+        { activityChoiceBadgeRow: true },
+        { revision, evaluationCache }
+      );
     }));
   }
 
@@ -163,7 +180,8 @@ export class ActivityConditionBadges {
     const rows = root.querySelectorAll("[data-activity-uuid], [data-activity-id]");
     await Promise.all(Array.from(rows).map(async (row) => {
       const activity = await ActivityConditionBadges.#resolveActivityFromElement(row);
-      await ActivityConditionBadges.#decorateElement(row, activity);
+      // Chat badges are historical and are intentionally not refreshed when targets change.
+      await ActivityConditionBadges.#decorateElement(row, activity, {}, { revision: null });
     }));
   }
 
@@ -592,17 +610,22 @@ export class ActivityConditionBadges {
     ActivityConditionBadges.#openSurfaces.set(app, { app, root, kind });
   }
 
-  static #pruneOpenSurfaces() {
+  static #pruneOpenViews() {
     for (const [app, surface] of ActivityConditionBadges.#openSurfaces) {
       if (!surface.root?.isConnected) {
         ActivityConditionBadges.#openSurfaces.delete(app);
+      }
+    }
+    for (const [app, dialog] of ActivityConditionBadges.#openChoiceDialogs) {
+      if (!dialog.root?.isConnected) {
+        ActivityConditionBadges.#openChoiceDialogs.delete(app);
       }
     }
   }
 
   static #canApplyResult(element, revision, requestId) {
     return Boolean(element?.isConnected)
-      && revision === ActivityConditionBadges.#evaluationRevision
+      && (revision === null || revision === ActivityConditionBadges.#evaluationRevision)
       && ActivityConditionBadges.#elementRequests.get(element) === requestId;
   }
 
